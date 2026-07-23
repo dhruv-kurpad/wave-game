@@ -65,27 +65,32 @@ void DSPProcessor::publishWave(const std::vector<float>& wave) {
 }
 
 void DSPProcessor::decayTowardSilence() {
-  float vol = volume_.load(std::memory_order_relaxed) * 0.92f;
-  float pitch = pitch_.load(std::memory_order_relaxed) * 0.92f;
-  if (vol < 0.001f) {
-    vol = 0.0f;
+  volume_env_ = envelopeToward(0.0f, volume_env_, config_.control_attack,
+                               config_.control_release);
+  pitch_env_ = envelopeToward(0.0f, pitch_env_, config_.control_attack,
+                              config_.control_release);
+  if (volume_env_ < 0.0005f) {
+    volume_env_ = 0.0f;
   }
-  if (pitch < 0.001f) {
-    pitch = 0.0f;
+  if (pitch_env_ < 0.0005f) {
+    pitch_env_ = 0.0f;
   }
-  volume_.store(vol, std::memory_order_relaxed);
-  pitch_.store(pitch, std::memory_order_relaxed);
-  raw_rms_.store(raw_rms_.load(std::memory_order_relaxed) * 0.92f,
+
+  volume_.store(volume_env_, std::memory_order_relaxed);
+  pitch_.store(pitch_env_, std::memory_order_relaxed);
+  raw_rms_.store(raw_rms_.load(std::memory_order_relaxed) *
+                     (1.0f - config_.control_release),
                  std::memory_order_relaxed);
-  if (pitch <= 0.0f) {
+  if (pitch_env_ <= 0.0f) {
     pitch_hz_.store(0.0f, std::memory_order_relaxed);
   }
 
   const float control =
-      (mode() == ControlMode::Volume) ? vol : pitch;
+      (mode() == ControlMode::Volume) ? volume_env_ : pitch_env_;
   phase_ += 0.08f;
   buildWaveFromVolume(scratch_wave_, control, phase_);
-  temporalSmooth(scratch_wave_, wave_state_, config_.smoothing_alpha);
+  temporalSmoothAsymmetric(scratch_wave_, wave_state_, config_.smoothing_alpha,
+                           config_.smoothing_release_alpha);
   spatialSmooth(wave_state_, config_.spatial_smooth);
   publishWave(wave_state_);
 }
@@ -94,15 +99,17 @@ void DSPProcessor::processBlock(const float* samples, std::size_t count) {
   const float rms = computeRms(samples, count);
   raw_rms_.store(rms, std::memory_order_relaxed);
 
-  const float vol = volumeFromRms(rms,
-                                  config_.volume_gate,
-                                  config_.volume_sensitivity,
-                                  peak_envelope_);
-  volume_.store(vol, std::memory_order_relaxed);
+  const float vol_target = volumeFromRms(rms,
+                                         config_.volume_gate,
+                                         config_.volume_sensitivity,
+                                         peak_envelope_);
+  volume_env_ = envelopeToward(vol_target, volume_env_, config_.control_attack,
+                               config_.control_release);
+  volume_.store(volume_env_, std::memory_order_relaxed);
 
   // --- Frequency path (always computed so meters stay live) ---
-  float pitch_unit = 0.0f;
-  float pitch_hz = 0.0f;
+  float pitch_target = 0.0f;
+  float pitch_hz = pitch_hz_.load(std::memory_order_relaxed);
 
   const int nfft = config_.fft_size;
   const std::size_t need = static_cast<std::size_t>(nfft);
@@ -139,26 +146,27 @@ void DSPProcessor::processBlock(const float* samples, std::size_t count) {
 
   if (voiced) {
     pitch_hz = dom.hz;
-    pitch_unit = mapPitchHzToUnit(dom.hz,
-                                  config_.pitch_min_hz,
-                                  300.0f,
-                                  1000.0f,
-                                  config_.pitch_max_hz);
+    pitch_target = mapPitchHzToUnit(dom.hz,
+                                    config_.pitch_min_hz,
+                                    300.0f,
+                                    1000.0f,
+                                    config_.pitch_max_hz);
   } else {
-    pitch_unit = pitch_.load(std::memory_order_relaxed) * 0.85f;
-    if (pitch_unit < 0.001f) {
-      pitch_unit = 0.0f;
-      pitch_hz = 0.0f;
-    } else {
-      pitch_hz = pitch_hz_.load(std::memory_order_relaxed);
-    }
+    pitch_target = 0.0f;
   }
 
-  pitch_.store(pitch_unit, std::memory_order_relaxed);
+  pitch_env_ = envelopeToward(pitch_target, pitch_env_, config_.control_attack,
+                              config_.control_release);
+  if (pitch_env_ < 0.0005f) {
+    pitch_env_ = 0.0f;
+    pitch_hz = 0.0f;
+  }
+
+  pitch_.store(pitch_env_, std::memory_order_relaxed);
   pitch_hz_.store(pitch_hz, std::memory_order_relaxed);
 
   const float control =
-      (mode() == ControlMode::Volume) ? vol : pitch_unit;
+      (mode() == ControlMode::Volume) ? volume_env_ : pitch_env_;
 
   phase_ += 0.12f + control * 0.25f;
   if (phase_ > 6.2831853f * 100.0f) {
@@ -168,7 +176,7 @@ void DSPProcessor::processBlock(const float* samples, std::size_t count) {
   buildWaveFromVolume(scratch_wave_, control, phase_);
 
   // In frequency mode, blend in a coarse spectrum envelope for visual character.
-  if (mode() == ControlMode::Frequency && bins > 2) {
+  if (mode() == ControlMode::Frequency && bins > 2 && voiced) {
     const std::size_t n = scratch_wave_.size();
     for (std::size_t i = 0; i < n; ++i) {
       const float t = (n == 1) ? 0.0f
@@ -182,7 +190,8 @@ void DSPProcessor::processBlock(const float* samples, std::size_t count) {
     }
   }
 
-  temporalSmooth(scratch_wave_, wave_state_, config_.smoothing_alpha);
+  temporalSmoothAsymmetric(scratch_wave_, wave_state_, config_.smoothing_alpha,
+                           config_.smoothing_release_alpha);
   spatialSmooth(wave_state_, config_.spatial_smooth);
   publishWave(wave_state_);
 }

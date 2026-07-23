@@ -90,6 +90,14 @@ int main() {
     expect(state[0] > 0.95f, "P2-DSP06 converges high");
   }
 
+  // Release envelope is slower than attack
+  {
+    float up = envelopeToward(1.0f, 0.0f, 0.45f, 0.04f);
+    float down = envelopeToward(0.0f, 1.0f, 0.45f, 0.04f);
+    expect(up > 0.4f, "envelope attack jumps up");
+    expect(down > 0.9f, "envelope release stays high");
+  }
+
   // P2-DSP07 spatial smoothing attenuates spike
   {
     std::vector<float> v(16, 0.2f);

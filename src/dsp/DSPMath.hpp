@@ -49,6 +49,18 @@ inline float volumeFromRms(float rms,
   return v;
 }
 
+// Asymmetric envelope: rise with attack, fall with slower release.
+// attack/release are blend factors in (0, 1] toward target each tick.
+inline float envelopeToward(float target,
+                            float current,
+                            float attack,
+                            float release) {
+  if (target > current) {
+    return current + (target - current) * attack;
+  }
+  return current + (target - current) * release;
+}
+
 // Temporal EMA: out = alpha * target + (1-alpha) * previous.
 inline void temporalSmooth(const std::vector<float>& target,
                            std::vector<float>& state,
@@ -62,6 +74,23 @@ inline void temporalSmooth(const std::vector<float>& target,
     state[i] = alpha * target[i] + one_minus * state[i];
   }
 }
+
+// Temporal EMA with slower fall than rise (wave settles gradually).
+inline void temporalSmoothAsymmetric(const std::vector<float>& target,
+                                     std::vector<float>& state,
+                                     float attack_alpha,
+                                     float release_alpha) {
+  if (state.size() != target.size()) {
+    state = target;
+    return;
+  }
+  for (std::size_t i = 0; i < target.size(); ++i) {
+    const float a =
+        (target[i] >= state[i]) ? attack_alpha : release_alpha;
+    state[i] = a * target[i] + (1.0f - a) * state[i];
+  }
+}
+
 
 // Neighbor blend. amount in [0, 1].
 inline void spatialSmooth(std::vector<float>& values, float amount) {

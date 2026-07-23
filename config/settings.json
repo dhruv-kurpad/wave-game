@@ -11,7 +11,10 @@
     "volume_sensitivity": 1.0,
     "pitch_min_hz": 80.0,
     "pitch_max_hz": 2000.0,
-    "smoothing_alpha": 0.2
+    "smoothing_alpha": 0.25,
+    "smoothing_release_alpha": 0.05,
+    "control_attack": 0.45,
+    "control_release": 0.04
   },
   "wave": {
     "point_count": 256,

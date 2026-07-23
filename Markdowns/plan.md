@@ -106,9 +106,9 @@ Phased build plan aligned with [spec.md](./spec.md). Each phase ends with a **do
 
 ### Done when
 
-- [ ] Wave reads as a continuous water surface
-- [ ] Color responds to control signal
-- [ ] Still 60 FPS with DSP running
+- [x] Wave reads as a continuous water surface
+- [x] Color responds to control signal
+- [x] Still 60 FPS with DSP running
 
 ---
 

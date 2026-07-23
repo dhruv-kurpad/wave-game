@@ -30,6 +30,7 @@ Update this file whenever work happens — builds, fixes, doc edits, failed atte
 | H | Phase 1: RingBuffer + AudioInput + debug harness + unit tests | Mic → ring → RMS bars |
 | I | Phase 2: DSPProcessor volume mode + wave draw + DSP tests | Mic → DSP → wave polyline |
 | J | Phase 3: FFT pitch mode + mode keys + pitch tests | Volume/Frequency switch |
+| K | Phase 4: WaveRenderer water surface + spline tests | Soft water + ~60 FPS |
 
 ---
 
@@ -466,11 +467,60 @@ cmake --build build
 
 ---
 
+## K — Phase 4: water visualizer
+
+**Goal:** Wave looks like a soft water surface, not a raw debug polyline.
+
+### K.1 — Spline math
+
+**What we did:**
+
+1. Added [`src/render/Spline.hpp`](../src/render/Spline.hpp): `catmullRom`, `sampleWaveHeight`, `resampleWaveDense` (optional osc in u-space).
+
+### K.2 — WaveRenderer
+
+**What we did:**
+
+1. Added [`WaveRenderer.hpp`](../src/render/WaveRenderer.hpp) / [`WaveRenderer.cpp`](../src/render/WaveRenderer.cpp).
+2. Per frame: dense Catmull-Rom → gradient column fill → alpha glow layers → thick crest.
+3. Tint from `control` + `ControlMode` (volume warm / frequency cool).
+4. Horizontal oscillation via `update(dt)` phase.
+5. `crestYAtPixelX` for Phase 5 ball sampling.
+6. Blend mode enabled; `column_step` available for perf.
+
+### K.3 — Main
+
+**What we did:**
+
+1. Replaced inline polyline fill with `WaveRenderer::draw` (clears + water).
+2. HUD meters drawn after water with translucent backs.
+3. FPS accumulator logged every ~60 frames.
+4. Title: `Wave Game — Phase 4 Water Visualizer`.
+5. Removed `src/render/.gitkeep`.
+
+### K.4 — Tests + verify
+
+**What we did:**
+
+1. Added [`tests/test_spline.cpp`](../tests/test_spline.cpp) + CMake target; all PASS.
+2. Linked `WaveRenderer.cpp` into `wavegame`.
+3. Smoke-run: `fps≈58.45`, overflow=0 (VSync ~60).
+
+### K.5 — Docs
+
+**What we did:**
+
+1. Phase 4 in `learning.md`.
+2. Marked Phase 4 done in `plan.md`.
+3. Updated `README.md`.
+4. This section K.
+
+---
+
 ## Not done yet (by design)
 
 | Item | Belongs to |
 |------|------------|
-| Water visualizer polish (Catmull-Rom, glow) | Phase 4 |
 | Ball physics | Phase 5 |
 | Obstacles, score, menus | Phase 6–7 |
 | Meters, particles, calibration | Phase 8 |
@@ -480,4 +530,30 @@ cmake --build build
 
 ## Next process entry
 
-When Phase 4 starts, append **section K**: Catmull-Rom wave render, gradient fill, glow/tint, learning notes.
+When Phase 5 starts, append **section L**: Ball + wave sampling, soft-follow / buoyancy, learning notes.
+
+---
+
+## K.hotfix — Gradual wave release on silence (2026-07-23)
+
+**Problem:** Wave dropped as soon as mic energy fell under the gate — `volumeFromRms` returned 0 and the wave target snapped to rest.
+
+**What we did:**
+
+1. Added `envelopeToward` + `temporalSmoothAsymmetric` in `DSPMath.hpp` (fast attack, slow release).
+2. DSP now keeps `volume_env_` / `pitch_env_` and eases toward gated targets (`control_release` ≈ 0.04 per ~5 ms tick).
+3. Wave temporal smooth uses `smoothing_release_alpha` ≈ 0.05 when falling (vs `smoothing_alpha` ≈ 0.25 rising).
+4. Updated `config/settings.json` + `main.cpp` defaults; extended unit test for release vs attack.
+5. Rebuild required: `cmake --build build`.
+
+---
+
+## UI — Mode help box under meters (2026-07-23)
+
+**What we did:**
+
+1. Initialized SDL_ttf; load system Arial for a 16pt HUD font.
+2. Drew a translucent box under the volume/pitch bars with:
+   - `Press 1 = Volume mode | Press 2 = Frequency mode`
+   - Current mode + short how-to line
+3. App still runs if the font fails to load (warning only).

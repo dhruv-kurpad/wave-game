@@ -39,16 +39,16 @@ Config is copied to `build/config/settings.json` on each build.
 ## Run
 
 ```bash
-./build/wavegame          # 1=volume, 2=frequency; Esc quits
+./build/wavegame          # soft water surface; 1/2 modes; Esc quits
 ./build/test_ring_buffer
 ./build/test_dsp_math
 ./build/test_pitch_fft
+./build/test_spline
 ```
 
-- Top bar = active control (amber volume / cyan frequency)
-- Thin bars = volume + pitch meters
-- Speak (mode 1) or hum/whistle low→high (mode 2)
-- Red background = mic failed to start
+- Water: Catmull-Rom crest, gradient fill, glow (tint follows volume/pitch)
+- Top bar = active control; thin bars = volume + pitch
+- Console logs `fps=` about once per second
 
 ### Microphone permission
 
@@ -79,4 +79,5 @@ third_party/ # KissFFT (vendored)
 | 1 Audio + ring buffer | Done |
 | 2 Volume DSP + wave | Done |
 | 3 Frequency DSP | Done |
-| 4+ | Not started — see [plan.md](./Markdowns/plan.md) |
+| 4 Water visualizer | Done |
+| 5+ | Not started — see [plan.md](./Markdowns/plan.md) |

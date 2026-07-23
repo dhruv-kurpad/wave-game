@@ -449,6 +449,93 @@ Top bar = active control (amber volume / cyan frequency). Thin bars below = both
 
 ---
 
-## Phase 4+
+## Phase 4 — Water visualizer
+
+**What we shipped:** a real water surface renderer — Catmull-Rom resampling, vertical gradient fill, soft glow + thick crest, horizontal oscillation, and tint driven by volume/pitch. HUD meters sit on top. FPS logged (~58–60 with VSync in smoke test).
+
+### Concept: why Catmull-Rom?
+
+DSP gives ~256 height samples. Connecting them with straight lines looks faceted. **Catmull-Rom** is a cubic spline that:
+
+- Passes through the control points (unlike some Beziers)
+- Needs only four neighbors (`p0…p3`) to interpolate between `p1` and `p2`
+- Is cheap and C¹-smooth enough for a water crest
+
+`sampleWaveHeight(heights, u)` with `u ∈ [0,1]` is also what Phase 5’s ball will use (`crestYAtPixelX`).
+
+### Concept: dense resample once per frame
+
+```
+256 DSP heights  →  Catmull-Rom  →  ~1280 column heights  →  draw
+```
+
+**Design decision: resample to screen columns, then one (banded) fill per column.**  
+That beats the Phase 2/3 nested “for each segment, for each x” fill and scales cleanly. `column_step` can be set to 2 if a machine drops frames.
+
+### Concept: fake gradient with SDL draw calls
+
+SDL’s 2D API draws in a solid color per call. We approximate a depth gradient by splitting each column into `gradient_steps` vertical segments and lerping **fill_top → fill_bot**. Not a shader — good enough and easy to teach.
+
+### Concept: glow + soft crest
+
+Enable `SDL_BLENDMODE_BLEND`, then:
+
+1. Draw several crest polylines offset up/down with low alpha (glow)
+2. Draw the bright crest as a thick stroke (parallel offsets −2…+2)
+
+**Design decision: procedural glow, not a bloom texture.** Keeps deps at zero and works on the software/Metal SDL backends alike.
+
+### Concept: horizontal oscillation
+
+A slow `sin(phase + u·4π) * amplitude` is added to the sample parameter `u` before Catmull-Rom. The mean height barely changes; the surface *slides* a little — “water feel” without fighting the DSP.
+
+### Concept: tint from control
+
+`makeTint(control, mode)`:
+
+- **Volume** — deeper teal, warmer glow as loudness rises  
+- **Frequency** — cooler cyan, crest brightens with pitch  
+
+Background clear is part of the same tint so the whole frame responds.
+
+### Files
+
+| File | Role |
+|------|------|
+| [`Spline.hpp`](../src/render/Spline.hpp) | Catmull-Rom + dense resample |
+| [`WaveRenderer.*`](../src/render/WaveRenderer.hpp) | Fill, glow, crest, tint, `crestYAtPixelX` |
+| [`tests/test_spline.cpp`](../tests/test_spline.cpp) | P4-WAV unit checks |
+
+### Try this
+
+```bash
+./build/test_spline
+./build/wavegame   # watch soft water; 1/2 modes; console prints fps=
+```
+
+### Phase 4 checklist
+
+- [x] Catmull-Rom dense path
+- [x] Gradient fill under crest
+- [x] Soft crest + glow
+- [x] Horizontal oscillation
+- [x] Tint from control / mode
+- [x] ~60 FPS with DSP (smoke ~58.5 under VSync)
+
+**Next (Phase 5):** ball that rests on the wave using `crestYAtPixelX` / soft-follow physics.
+
+### Hotfix — gradual silence release
+
+When the mic goes quiet, gated RMS used to snap the control to **0**, so the wave died instantly. We now use an **asymmetric envelope**:
+
+- **Attack** (`control_attack` ≈ 0.45) — still rises quickly when you make sound  
+- **Release** (`control_release` ≈ 0.04) — eases down over ~1s of DSP ticks  
+- Wave points also fall slower via `smoothing_release_alpha` (0.05) vs rise (`smoothing_alpha` 0.25)
+
+Tune in `DSPProcessor::Config` / `config/settings.json`: smaller `control_release` = longer hang after silence.
+
+---
+
+## Phase 5+
 
 *(written when we build it)*

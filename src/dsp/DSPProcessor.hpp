@@ -23,8 +23,13 @@ class DSPProcessor {
   struct Config {
     float volume_gate = 0.01f;
     float volume_sensitivity = 1.0f;
-    float smoothing_alpha = 0.2f;
+    // Wave temporal smooth: attack (rise) vs release (fall).
+    float smoothing_alpha = 0.25f;
+    float smoothing_release_alpha = 0.05f;
     float spatial_smooth = 0.35f;
+    // Control envelope per DSP tick (~5 ms): fast rise, slow fall.
+    float control_attack = 0.45f;
+    float control_release = 0.04f;
     std::size_t wave_point_count = 256;
     std::size_t analysis_frames = 1024;
     int fft_size = 1024;
@@ -92,6 +97,8 @@ class DSPProcessor {
 
   float peak_envelope_ = 0.02f;
   float phase_ = 0.0f;
+  float volume_env_ = 0.0f;
+  float pitch_env_ = 0.0f;
   std::vector<float> wave_state_;
   std::vector<float> scratch_wave_;
   std::vector<float> sample_scratch_;
