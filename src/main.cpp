@@ -4,7 +4,6 @@
 #include <SDL.h>
 
 #include <algorithm>
-#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <vector>
@@ -12,7 +11,7 @@
 namespace {
 constexpr int kWindowWidth = 1280;
 constexpr int kWindowHeight = 720;
-constexpr const char* kWindowTitle = "Wave Game — Phase 2 Volume DSP";
+constexpr const char* kWindowTitle = "Wave Game — Phase 3 Frequency DSP";
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -59,7 +58,7 @@ int main(int argc, char* argv[]) {
   if (!audio_ok) {
     std::cerr << "AudioInput failed: " << audio.lastError() << '\n';
   } else {
-    std::cout << "Audio + DSP started. Speak to raise the wave. Esc quits.\n";
+    std::cout << "Keys: 1 = Volume mode, 2 = Frequency mode. Esc quits.\n";
   }
 
   DSPProcessor::Config dsp_config;
@@ -69,8 +68,13 @@ int main(int argc, char* argv[]) {
   dsp_config.spatial_smooth = 0.35f;
   dsp_config.wave_point_count = 256;
   dsp_config.analysis_frames = 1024;
+  dsp_config.fft_size = 1024;
+  dsp_config.sample_rate = 44100.0f;
+  dsp_config.pitch_min_hz = 80.0f;
+  dsp_config.pitch_max_hz = 2000.0f;
 
   DSPProcessor dsp(dsp_config);
+  dsp.setMode(ControlMode::Volume);
   dsp.start(audio.buffer());
 
   std::vector<float> wave;
@@ -83,47 +87,83 @@ int main(int argc, char* argv[]) {
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_QUIT) {
         running = false;
-      } else if (event.type == SDL_KEYDOWN &&
-                 event.key.keysym.sym == SDLK_ESCAPE) {
-        running = false;
+      } else if (event.type == SDL_KEYDOWN) {
+        if (event.key.keysym.sym == SDLK_ESCAPE) {
+          running = false;
+        } else if (event.key.keysym.sym == SDLK_1) {
+          dsp.setMode(ControlMode::Volume);
+          std::cout << "Mode: Volume\n";
+        } else if (event.key.keysym.sym == SDLK_2) {
+          dsp.setMode(ControlMode::Frequency);
+          std::cout << "Mode: Frequency\n";
+        }
       }
     }
 
     dsp.copyWaveHeights(wave);
+    const float control = dsp.controlValue();
     const float volume = dsp.volume();
-    const float rms = dsp.rawRms();
-    const float fill =
-        static_cast<float>(audio.buffer().available()) /
-        static_cast<float>(std::max<std::size_t>(1, audio.buffer().capacity()));
+    const float pitch = dsp.pitch();
+    const float hz = dsp.pitchHz();
 
     ++frame_counter;
     if (frame_counter % 60 == 0) {
-      std::cout << "vol=" << volume << " rms=" << rms << " fill=" << fill
-                << " overflow=" << audio.buffer().overflowCount()
-                << " points=" << wave.size() << '\n';
+      const char* mode_name =
+          (dsp.mode() == ControlMode::Volume) ? "volume" : "frequency";
+      std::cout << "mode=" << mode_name << " control=" << control
+                << " vol=" << volume << " pitch=" << pitch << " hz=" << hz
+                << " overflow=" << audio.buffer().overflowCount() << '\n';
     }
 
-    if (audio_ok) {
-      SDL_SetRenderDrawColor(renderer, 12, 48, 64, 255);
-    } else {
+    // Tint: volume mode warmer amber, frequency mode cooler cyan.
+    if (!audio_ok) {
       SDL_SetRenderDrawColor(renderer, 64, 20, 20, 255);
+    } else if (dsp.mode() == ControlMode::Frequency) {
+      const Uint8 g = static_cast<Uint8>(48 + control * 40);
+      const Uint8 b = static_cast<Uint8>(64 + control * 80);
+      SDL_SetRenderDrawColor(renderer, 12, g, b, 255);
+    } else {
+      SDL_SetRenderDrawColor(renderer, 12, 48, 64, 255);
     }
     SDL_RenderClear(renderer);
 
-    // Volume meter (top)
     const int bar_margin = 40;
-    const int bar_height = 28;
+    const int bar_height = 24;
     const int bar_max_w = kWindowWidth - bar_margin * 2;
-    SDL_Rect vol_bg{bar_margin, bar_margin, bar_max_w, bar_height};
+
+    // Control bar (active mode)
+    SDL_Rect ctrl_bg{bar_margin, bar_margin, bar_max_w, bar_height};
+    SDL_SetRenderDrawColor(renderer, 30, 30, 40, 255);
+    SDL_RenderFillRect(renderer, &ctrl_bg);
+    SDL_Rect ctrl_fg{bar_margin, bar_margin,
+                     static_cast<int>(bar_max_w * std::min(1.0f, control)),
+                     bar_height};
+    if (dsp.mode() == ControlMode::Frequency) {
+      SDL_SetRenderDrawColor(renderer, 100, 210, 255, 255);
+    } else {
+      SDL_SetRenderDrawColor(renderer, 220, 160, 60, 255);
+    }
+    SDL_RenderFillRect(renderer, &ctrl_fg);
+
+    // Secondary: pitch (freq) or volume depending on mode — show both thin bars
+    SDL_Rect vol_bg{bar_margin, bar_margin + bar_height + 8, bar_max_w / 2 - 4,
+                    12};
+    SDL_Rect pitch_bg{bar_margin + bar_max_w / 2 + 4,
+                      bar_margin + bar_height + 8, bar_max_w / 2 - 4, 12};
     SDL_SetRenderDrawColor(renderer, 30, 30, 40, 255);
     SDL_RenderFillRect(renderer, &vol_bg);
-    SDL_Rect vol_fg{bar_margin, bar_margin,
-                    static_cast<int>(bar_max_w * std::min(1.0f, volume)),
-                    bar_height};
+    SDL_RenderFillRect(renderer, &pitch_bg);
+    SDL_Rect vol_fg{vol_bg.x, vol_bg.y,
+                    static_cast<int>(vol_bg.w * std::min(1.0f, volume)),
+                    vol_bg.h};
+    SDL_Rect pitch_fg{pitch_bg.x, pitch_bg.y,
+                      static_cast<int>(pitch_bg.w * std::min(1.0f, pitch)),
+                      pitch_bg.h};
     SDL_SetRenderDrawColor(renderer, 220, 160, 60, 255);
     SDL_RenderFillRect(renderer, &vol_fg);
+    SDL_SetRenderDrawColor(renderer, 100, 210, 255, 255);
+    SDL_RenderFillRect(renderer, &pitch_fg);
 
-    // Wave polyline — heights in [0,1] map to screen Y (1 = higher on screen)
     if (!wave.empty()) {
       points.resize(wave.size());
       const float y_top = 140.0f;
@@ -139,8 +179,11 @@ int main(int argc, char* argv[]) {
         points[i].y = static_cast<int>(y);
       }
 
-      // Simple fill under the wave (vertical strips).
-      SDL_SetRenderDrawColor(renderer, 40, 120, 150, 255);
+      if (dsp.mode() == ControlMode::Frequency) {
+        SDL_SetRenderDrawColor(renderer, 30, 100, 140, 255);
+      } else {
+        SDL_SetRenderDrawColor(renderer, 40, 120, 150, 255);
+      }
       for (std::size_t i = 0; i + 1 < points.size(); ++i) {
         const int x0 = points[i].x;
         const int x1 = points[i + 1].x;
@@ -149,7 +192,8 @@ int main(int argc, char* argv[]) {
         for (int x = x0; x <= x1; ++x) {
           const float u =
               (x1 == x0) ? 0.0f
-                         : static_cast<float>(x - x0) / static_cast<float>(x1 - x0);
+                         : static_cast<float>(x - x0) /
+                               static_cast<float>(x1 - x0);
           const int y = static_cast<int>(y0 + u * (y1 - y0));
           SDL_RenderDrawLine(renderer, x, y, x, kWindowHeight);
         }

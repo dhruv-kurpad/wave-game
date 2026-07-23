@@ -361,6 +361,94 @@ Amber bar = normalized volume. Teal fill = wave under the crest.
 
 ---
 
-## Phase 3+
+## Phase 3 — Frequency DSP (pitch mode)
+
+**What we shipped:** KissFFT-based dominant-pitch detection, a normalized `pitch` control mapped through low/mid/high bands, keyboard mode switch (`1` volume / `2` frequency) without restarting the mic, and gates so silence does not spam false peaks.
+
+### Concept: what an FFT gives you
+
+A block of time-domain samples (e.g. 1024 floats) can be rewritten as a sum of sinusoids. The **FFT** computes the amplitude (and phase) of each frequency **bin**.
+
+- Bin width ≈ `sample_rate / nfft` → at 44100/1024 ≈ **43 Hz** per bin  
+- Real signals use a **real FFT** (`kiss_fftr`): output length `nfft/2+1` (0 Hz … Nyquist)
+
+We only need **magnitudes** `|X[k]| = √(re²+im²)` for “which pitch is loudest?”
+
+### Concept: Hann window
+
+Chopping audio into a finite block is like multiplying by a rectangle — that smears energy across bins (**spectral leakage**). A **Hann window** tapers the edges to ~0:
+
+`w[i] = 0.5 * (1 - cos(2π i / (N-1)))`
+
+**Design decision: always window before FFT.** Without it, a pure 440 Hz tone leaks into neighbors and peak-picking gets messier.
+
+### Concept: dominant bin + parabolic refinement
+
+1. Skip **DC** (bin 0) and bins below `pitch_min_hz`  
+2. Find `k` with max magnitude in the allowed range  
+3. **Parabolic interpolation** using `mag[k-1], mag[k], mag[k+1]` estimates a fractional bin → smoother Hz than “snap to 43 Hz steps”
+
+### Concept: Hz → game control bands
+
+Per the spec:
+
+| Hz | Band | Unit range (approx) |
+|----|------|---------------------|
+| &lt; 300 | low | 0 … ⅓ |
+| 300–1000 | mid | ⅓ … ⅔ |
+| &gt; 1000 | high | ⅔ … 1 |
+
+`mapPitchHzToUnit` piece-wise lerps through those edges up to `pitch_max_hz` (2000). Humming low→high should lift the wave; whistling high sits near the top.
+
+### Concept: silence gate (false peaks)
+
+In a quiet room the spectrum is tiny noise — some bin always “wins.” We require:
+
+1. RMS ≥ `volume_gate` (there is actual energy)  
+2. Peak magnitude ≫ spectrum mean (`pitch_peak_ratio`, default 8×)  
+3. Absolute floor on peak mag  
+
+Otherwise pitch **decays** toward 0 instead of jumping. That is why frequency mode stays calm when you are silent.
+
+### Concept: mode switch without touching audio
+
+`std::atomic<int> mode_` — UI stores `Volume` or `Frequency`; DSP reads it each block. **PortAudio keeps running.** Both volume and pitch are computed every block so the secondary meters stay live; only `controlValue()` (which drives the wave) depends on mode.
+
+Keys in [`main.cpp`](../src/main.cpp): **`1`** volume, **`2`** frequency.
+
+### Files to read
+
+| File | Role |
+|------|------|
+| [`PitchMath.hpp`](../src/dsp/PitchMath.hpp) | Hann, peak pick, Hz→unit map |
+| [`FFT.hpp`](../src/dsp/FFT.hpp) / [`FFT.cpp`](../src/dsp/FFT.cpp) | KissFFT RAII wrapper |
+| [`DSPProcessor.cpp`](../src/dsp/DSPProcessor.cpp) | Mode + gates + wave publish |
+| [`tests/test_pitch_fft.cpp`](../tests/test_pitch_fft.cpp) | Synth tones, no mic |
+
+### Try this
+
+```bash
+./build/test_pitch_fft
+./build/wavegame
+# 1 = volume (speak), 2 = frequency (hum/whistle low→high)
+```
+
+Top bar = active control (amber volume / cyan frequency). Thin bars below = both meters.
+
+### Phase 3 checklist
+
+- [x] KissFFT + Hann window
+- [x] Magnitude spectrum + dominant bin (+ parabolic Hz)
+- [x] Band map &lt;300 / 300–1000 / &gt;1000 → [0,1]
+- [x] `pitch` / `pitchHz` published
+- [x] Mode switch via atomic (`1`/`2`), audio uninterrupted
+- [x] Silence gating against false peaks
+- [x] Unit tests with synthetic tones
+
+**Next (Phase 4):** Catmull-Rom water surface, gradient fill, glow, tint from control — make it look like water, not a debug polyline.
+
+---
+
+## Phase 4+
 
 *(written when we build it)*

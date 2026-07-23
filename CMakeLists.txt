@@ -25,6 +25,7 @@ add_executable(wavegame
   src/main.cpp
   src/audio/AudioInput.cpp
   src/dsp/DSPProcessor.cpp
+  src/dsp/FFT.cpp
 )
 
 add_executable(test_ring_buffer
@@ -36,6 +37,13 @@ add_executable(test_dsp_math
   tests/test_dsp_math.cpp
 )
 target_include_directories(test_dsp_math PRIVATE src)
+
+add_executable(test_pitch_fft
+  tests/test_pitch_fft.cpp
+  src/dsp/FFT.cpp
+)
+target_include_directories(test_pitch_fft PRIVATE src)
+target_link_libraries(test_pitch_fft PRIVATE kissfft)
 
 
 target_include_directories(wavegame PRIVATE

@@ -29,6 +29,7 @@ Update this file whenever work happens — builds, fixes, doc edits, failed atte
 | G | User moved docs into `Markdowns/`; links fixed; standing rules locked in | All markdowns colocated |
 | H | Phase 1: RingBuffer + AudioInput + debug harness + unit tests | Mic → ring → RMS bars |
 | I | Phase 2: DSPProcessor volume mode + wave draw + DSP tests | Mic → DSP → wave polyline |
+| J | Phase 3: FFT pitch mode + mode keys + pitch tests | Volume/Frequency switch |
 
 ---
 
@@ -416,11 +417,59 @@ cmake --build build
 
 ---
 
+## J — Phase 3: frequency DSP (pitch mode)
+
+**Goal:** Dominant pitch drives control + wave; switch modes without restarting audio.
+
+### J.1 — Pitch / FFT helpers
+
+**What we did:**
+
+1. Added [`src/dsp/PitchMath.hpp`](../src/dsp/PitchMath.hpp): Hann window, `findDominantFrequency` (skip DC, parabolic refine), `mapPitchHzToUnit` (low/mid/high bands).
+2. Added [`FFT.hpp`](../src/dsp/FFT.hpp) / [`FFT.cpp`](../src/dsp/FFT.cpp): RAII `RealFFT` over `kiss_fftr`; opaque state holds cfg + freq buffer (no per-callback heap alloc for cfg).
+
+### J.2 — DSPProcessor extensions
+
+**What we did:**
+
+1. Added `ControlMode` enum + `atomic` mode; `setMode` / `mode` / `pitch` / `pitchHz` / `controlValue`.
+2. Config: `fft_size`, `sample_rate`, `pitch_min_hz`, `pitch_max_hz`, `pitch_peak_ratio`.
+3. Each block: still compute volume; also window → FFT → magnitudes → dominant Hz; gate with RMS + peak-vs-mean; map to pitch unit.
+4. Wave uses `controlValue()` (volume or pitch). Frequency mode also blends a coarse spectrum envelope into the wave shape.
+5. Decay path updates both volume and pitch toward silence.
+
+### J.3 — Main UI
+
+**What we did:**
+
+1. Keys **`1`** / **`2`** switch mode (logs to console); audio/DSP keep running.
+2. Top bar = active control (amber vs cyan); thin bars = volume + pitch meters.
+3. Background tint shifts cooler in frequency mode.
+4. Title: `Wave Game — Phase 3 Frequency DSP`.
+
+### J.4 — Tests + verify
+
+**What we did:**
+
+1. Added [`tests/test_pitch_fft.cpp`](../tests/test_pitch_fft.cpp); CMake target links `kissfft`.
+2. All unit tests PASS (ring, dsp math, pitch/FFT including 440 Hz detection and band maps).
+3. Smoke-run: printed mode key hint; app started cleanly.
+
+### J.5 — Docs
+
+**What we did:**
+
+1. Phase 3 section in `learning.md`.
+2. Marked Phase 3 done in `plan.md`.
+3. Updated `README.md`.
+4. This section J.
+
+---
+
 ## Not done yet (by design)
 
 | Item | Belongs to |
 |------|------------|
-| FFT / pitch mode | Phase 3 |
 | Water visualizer polish (Catmull-Rom, glow) | Phase 4 |
 | Ball physics | Phase 5 |
 | Obstacles, score, menus | Phase 6–7 |
@@ -431,4 +480,4 @@ cmake --build build
 
 ## Next process entry
 
-When Phase 3 starts, append **section J**: KissFFT / Hann / dominant frequency, `pitch_value`, mode switch, learning notes.
+When Phase 4 starts, append **section K**: Catmull-Rom wave render, gradient fill, glow/tint, learning notes.

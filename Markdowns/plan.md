@@ -85,9 +85,9 @@ Phased build plan aligned with [spec.md](./spec.md). Each phase ends with a **do
 
 ### Done when
 
-- [ ] Humming / whistling low→high visibly lifts the mapped height
-- [ ] Mode switch changes control source without restarting audio
-- [ ] Frequency mode usable without constant false peaks at silence
+- [x] Humming / whistling low→high visibly lifts the mapped height
+- [x] Mode switch changes control source without restarting audio
+- [x] Frequency mode usable without constant false peaks at silence
 
 ---
 

@@ -39,15 +39,16 @@ Config is copied to `build/config/settings.json` on each build.
 ## Run
 
 ```bash
-./build/wavegame          # speak — wave rises; Esc quits
+./build/wavegame          # 1=volume, 2=frequency; Esc quits
 ./build/test_ring_buffer
 ./build/test_dsp_math
+./build/test_pitch_fft
 ```
 
-- Amber bar = normalized volume (0–1)
-- Teal shape = wave from DSP (`wave_heights`)
-- **Esc** or close the window to quit
-- Red background = mic failed to start (check permissions)
+- Top bar = active control (amber volume / cyan frequency)
+- Thin bars = volume + pitch meters
+- Speak (mode 1) or hum/whistle low→high (mode 2)
+- Red background = mic failed to start
 
 ### Microphone permission
 
@@ -77,4 +78,5 @@ third_party/ # KissFFT (vendored)
 | 0 Bootstrap | Done |
 | 1 Audio + ring buffer | Done |
 | 2 Volume DSP + wave | Done |
-| 3+ | Not started — see [plan.md](./Markdowns/plan.md) |
+| 3 Frequency DSP | Done |
+| 4+ | Not started — see [plan.md](./Markdowns/plan.md) |
