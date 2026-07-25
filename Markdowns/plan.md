@@ -127,9 +127,9 @@ Phased build plan aligned with [spec.md](./spec.md). Each phase ends with a **do
 
 ### Done when
 
-- [ ] Ball sits on the surface at rest
-- [ ] Raising control lifts ball; lowering drops it
-- [ ] Jitter is acceptable (damped)
+- [x] Ball sits on the surface at rest
+- [x] Raising control lifts ball; lowering drops it
+- [x] Jitter is acceptable (damped)
 
 ---
 
@@ -150,9 +150,9 @@ Phased build plan aligned with [spec.md](./spec.md). Each phase ends with a **do
 
 ### Done when
 
-- [ ] Full loop playable in both modes
-- [ ] Collisions reliable; score updates
-- [ ] Pause works without killing the audio device (or cleanly restarts)
+- [x] Full loop playable in both modes
+- [x] Collisions reliable; score updates
+- [x] Pause works without killing the audio device (or cleanly restarts)
 
 ---
 

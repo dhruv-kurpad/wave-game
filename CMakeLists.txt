@@ -27,6 +27,9 @@ add_executable(wavegame
   src/dsp/DSPProcessor.cpp
   src/dsp/FFT.cpp
   src/render/WaveRenderer.cpp
+  src/game/Ball.cpp
+  src/game/Obstacle.cpp
+  src/game/Game.cpp
 )
 
 add_executable(test_ring_buffer
@@ -50,6 +53,32 @@ add_executable(test_spline
   tests/test_spline.cpp
 )
 target_include_directories(test_spline PRIVATE src)
+
+add_executable(test_ball
+  tests/test_ball.cpp
+  src/game/Ball.cpp
+)
+target_include_directories(test_ball PRIVATE src)
+
+add_executable(test_game
+  tests/test_game.cpp
+  src/game/Ball.cpp
+  src/game/Obstacle.cpp
+  src/game/Game.cpp
+)
+target_include_directories(test_game PRIVATE
+  src
+  ${SDL2_INCLUDE_DIRS}
+  ${SDL2_TTF_INCLUDE_DIRS}
+)
+target_link_directories(test_game PRIVATE
+  ${SDL2_LIBRARY_DIRS}
+  ${SDL2_TTF_LIBRARY_DIRS}
+)
+target_link_libraries(test_game PRIVATE
+  ${SDL2_LIBRARIES}
+  ${SDL2_TTF_LIBRARIES}
+)
 
 
 target_include_directories(wavegame PRIVATE

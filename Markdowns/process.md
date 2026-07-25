@@ -31,6 +31,8 @@ Update this file whenever work happens — builds, fixes, doc edits, failed atte
 | I | Phase 2: DSPProcessor volume mode + wave draw + DSP tests | Mic → DSP → wave polyline |
 | J | Phase 3: FFT pitch mode + mode keys + pitch tests | Volume/Frequency switch |
 | K | Phase 4: WaveRenderer water surface + spline tests | Soft water + ~60 FPS |
+| L | Phase 5: Ball physics on wave + ball tests | Ball rides the water |
+| M | Phase 6: Game states, pipes, score, pause | Playable loop |
 
 ---
 
@@ -517,20 +519,104 @@ cmake --build build
 
 ---
 
+## L — Phase 5: ball physics
+
+**Goal:** Ball rests on the wave with soft-follow / buoyancy feel and damping.
+
+### L.1 — Ball class
+
+**What we did:**
+
+1. Added [`src/game/Ball.hpp`](../src/game/Ball.hpp) / [`Ball.cpp`](../src/game/Ball.cpp).
+2. Fixed `x` at screen center; `crestY` via `sampleWaveHeight` (no render oscillation).
+3. Rest pose `y = crestY - radius` (SDL +Y down).
+4. Soft-follow + gravity + buoyancy + damping; `max_vertical_speed` + dt clamp against teleports.
+5. `inContact` / `contactImpulse` for future splash FX.
+6. [`DrawCircle.hpp`](../src/game/DrawCircle.hpp) for filled-circle rendering.
+
+### L.2 — Main
+
+**What we did:**
+
+1. Construct/reset ball; each frame `ball.update` then draw after water, before HUD.
+2. Orange/gold ball with shadow + highlight; color shifts slightly by mode.
+3. Console logs `ballY` and `contact`.
+4. Title: `Wave Game — Phase 5 Ball Physics`.
+5. Removed `src/game/.gitkeep`.
+
+### L.3 — Tests + verify
+
+**What we did:**
+
+1. Added [`tests/test_ball.cpp`](../tests/test_ball.cpp) + CMake target; all PASS.
+2. Linked `Ball.cpp` into `wavegame`.
+3. Smoke-run started cleanly.
+
+### L.4 — Docs
+
+**What we did:**
+
+1. Phase 5 in `learning.md`.
+2. Marked Phase 5 done in `plan.md`.
+3. Updated `README.md`.
+4. This section L.
+
+---
+
+## M — Phase 6: gameplay shell
+
+**Goal:** Mode select → play → score → collide → restart; pause without killing audio.
+
+### M.1 — Systems
+
+**What we did:**
+
+1. [`Collision.hpp`](../src/game/Collision.hpp) — circle vs AABB.
+2. [`Obstacle.hpp`](../src/game/Obstacle.hpp) / [`Obstacle.cpp`](../src/game/Obstacle.cpp) — pipe pairs, scroll, spawn, score-on-pass, freeze.
+3. [`Game.hpp`](../src/game/Game.hpp) / [`Game.cpp`](../src/game/Game.cpp) — state machine, input (keys + mouse), overlays.
+4. [`HudText.hpp`](../src/game/HudText.hpp) — TTF draw helpers + buttons.
+
+### M.2 — Main
+
+**What we did:**
+
+1. Rewrote [`main.cpp`](../src/main.cpp) around `Game`: menu shows live wave; play draws pipes + ball + score; pause/game-over overlays.
+2. Esc on menu quits app; Esc in play pauses (no longer immediate quit).
+3. DSP mode follows `game.selectedMode()`; audio never stopped on pause.
+4. Title: `Wave Game — Phase 6 Gameplay`.
+
+### M.3 — Tests + verify
+
+**What we did:**
+
+1. Added [`tests/test_game.cpp`](../tests/test_game.cpp); all PASS (collision, scroll, states, freeze).
+2. CMake: `Obstacle.cpp` + `Game.cpp` in `wavegame` and `test_game`.
+3. Smoke-run started with mode-select hint.
+
+### M.4 — Docs
+
+**What we did:**
+
+1. Phase 6 in `learning.md`.
+2. Marked Phase 6 done in `plan.md`.
+3. Updated `README.md`.
+4. This section M.
+
+---
+
 ## Not done yet (by design)
 
 | Item | Belongs to |
 |------|------------|
-| Ball physics | Phase 5 |
-| Obstacles, score, menus | Phase 6–7 |
-| Meters, particles, calibration | Phase 8 |
+| Extra obstacle types + difficulty ramp | Phase 7 |
+| Particles, calibration, SFX polish | Phase 8 |
 | JSON config loader | Later polish |
 
 ---
 
 ## Next process entry
 
-When Phase 5 starts, append **section L**: Ball + wave sampling, soft-follow / buoyancy, learning notes.
+When Phase 7 starts, append **section N**: platforms/spikes, difficulty curve, learning notes.
 
 ---
 

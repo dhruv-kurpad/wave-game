@@ -536,6 +536,136 @@ Tune in `DSPProcessor::Config` / `config/settings.json`: smaller `control_releas
 
 ---
 
-## Phase 5+
+## Phase 5 — Ball physics
+
+**What we shipped:** an orange ball fixed at screen center that rides the water — soft-follow + gravity/buoyancy/damping, speed clamps, and crest contact detection for later particles.
+
+### Concept: screen space vs wave space
+
+DSP heights are **normalized [0, 1]**. The ball lives in **pixels** (SDL: +Y is down).
+
+```
+crestY = y_bottom - height * (y_bottom - y_top)
+targetY for ball center = crestY - radius
+```
+
+The bottom of the circle sits on the crest.
+
+### Concept: soft-follow + buoyancy
+
+Spec baseline:
+
+```text
+ballY += (targetY - ballY) * blend
+```
+
+We also add:
+
+- **Gravity** — pulls +Y  
+- **Buoyancy** — pushes up when the ball is below the rest pose (submerged)  
+- **Damping** — kills jitter  
+- **Max vertical speed** — stops teleports when the wave spikes  
+
+**Design decision: sample the DSP wave with Catmull-Rom, not the renderer’s oscillating dense path.** Physics stays stable; the water can still shimmer visually.
+
+### Concept: contact impulse
+
+`inContact` when near the rest pose. `contactImpulse` fires when we cross into contact while moving down — Phase 8 can spawn splash particles from that.
+
+### Files
+
+| File | Role |
+|------|------|
+| [`Ball.hpp`](../src/game/Ball.hpp) / [`Ball.cpp`](../src/game/Ball.cpp) | Physics |
+| [`DrawCircle.hpp`](../src/game/DrawCircle.hpp) | Filled circle draw |
+| [`tests/test_ball.cpp`](../tests/test_ball.cpp) | Rest, follow, clamp, no-teleport |
+
+### Try this
+
+```bash
+./build/test_ball
+./build/wavegame   # speak or press 2 + hum — ball rises/falls with the wave
+```
+
+### Phase 5 checklist
+
+- [x] Ball + wave height sampling (Catmull-Rom)
+- [x] Fixed center X; Y updated each frame
+- [x] Soft-follow + gravity/buoyancy/damping
+- [x] Speed clamp; spike-safe
+- [x] Contact / impulse flags
+- [x] Unit tests
+
+**Next (Phase 6):** mode select screen, scrolling pipes, score, pause, game over.
+
+---
+
+## Phase 6 — Gameplay shell
+
+**What we shipped:** a full loop — mode select (with live wave preview) → play through scrolling pipes → score → collide → game over → retry/menu. Pause freezes pipes without stopping the mic/DSP.
+
+### Concept: game state machine
+
+```
+ModeSelect ──Play──► Playing ──Esc──► Paused
+                │                      │
+                │◄────Resume───────────┘
+                │
+                └──hit pipe──► GameOver ──Retry──► Playing
+                                   └──Menu──► ModeSelect
+```
+
+Each state owns which systems update: only `Playing` advances pipes/score/collision. Wave + audio keep running in every state (preview on the menu).
+
+### Concept: Flappy-style pipes
+
+Each obstacle is two AABBs (top + bottom) with a vertical **gap**. They scroll left at `scroll_speed`. Score increments when a pipe’s right edge passes the ball’s X.
+
+**Circle vs rect:** clamp ball center to the rect, then check distance ≤ radius — cheap and reliable.
+
+### Concept: pause without killing audio
+
+`PipeField::freeze()` stops scrolling. PortAudio + DSP keep running so the wave still reacts — resume feels instant.
+
+### Controls
+
+| Context | Input |
+|---------|--------|
+| Menu | `1`/`2` mode, click buttons, Space/Enter play, Esc quit |
+| Playing | voice/pitch steers ball, Esc pause |
+| Paused | Esc/Space resume, Q/M menu |
+| Game Over | R/Space retry, M/Esc menu |
+
+### Files
+
+| File | Role |
+|------|------|
+| [`Game.*`](../src/game/Game.hpp) | States, input, overlay UI |
+| [`Obstacle.*`](../src/game/Obstacle.hpp) | Pipes, scroll, score |
+| [`Collision.hpp`](../src/game/Collision.hpp) | Circle–AABB |
+| [`HudText.hpp`](../src/game/HudText.hpp) | TTF helpers |
+
+### Try this
+
+```bash
+./build/test_game
+./build/wavegame
+```
+
+### Phase 6 checklist
+
+- [x] State machine ModeSelect / Playing / Paused / GameOver
+- [x] Mode buttons + keyboard; live wave on menu
+- [x] Scrolling pipes + random gap Y
+- [x] Circle–AABB collision → game over
+- [x] Score on pipes passed
+- [x] Pause freezes scroll; audio stays up
+- [x] Retry / menu from game over
+
+**Next (Phase 7):** more obstacle types + difficulty ramp.
+
+---
+
+## Phase 7+
 
 *(written when we build it)*

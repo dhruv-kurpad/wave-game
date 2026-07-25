@@ -39,16 +39,18 @@ Config is copied to `build/config/settings.json` on each build.
 ## Run
 
 ```bash
-./build/wavegame          # soft water surface; 1/2 modes; Esc quits
+./build/wavegame          # menu → play pipes; Esc pauses
 ./build/test_ring_buffer
 ./build/test_dsp_math
 ./build/test_pitch_fft
 ./build/test_spline
+./build/test_ball
+./build/test_game
 ```
 
-- Water: Catmull-Rom crest, gradient fill, glow (tint follows volume/pitch)
-- Top bar = active control; thin bars = volume + pitch
-- Console logs `fps=` about once per second
+- **Menu:** `1`/`2` pick Volume/Frequency, Space/click Play (live wave behind)
+- **Play:** steer with voice/pitch; pass pipe gaps to score; Esc pauses
+- **Pause / Game Over:** resume, retry, or return to menu
 
 ### Microphone permission
 
@@ -80,4 +82,6 @@ third_party/ # KissFFT (vendored)
 | 2 Volume DSP + wave | Done |
 | 3 Frequency DSP | Done |
 | 4 Water visualizer | Done |
-| 5+ | Not started — see [plan.md](./Markdowns/plan.md) |
+| 5 Ball physics | Done |
+| 6 Gameplay shell | Done |
+| 7+ | Not started — see [plan.md](./Markdowns/plan.md) |
